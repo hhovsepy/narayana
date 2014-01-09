@@ -12,10 +12,14 @@ import java.util.logging.Logger;
 public class JBossAS7ServerKillProcessor implements ServerKillProcessor {
 
     private static final Logger logger = Logger.getLogger(JBossAS7ServerKillProcessor.class.getName());
-    private static final String CHECK_JBOSS_ALIVE_CMD = "if [ \"$(ps aux | grep 'jboss-module[s]')\" == \"\" ]; then exit 1; fi";
-    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "if [ \"$(ps aux | grep '\\[java\\] <defunct>')\" == \"\" ]; then exit 1; fi";
-    private static final String SHUTDOWN_JBOSS_CMD = "ps axu | grep jboss-module[s] | awk '{print $2}' | xargs kill";
-
+    private static final String CHECK_JBOSS_ALIVE_CMD = "if [ \"x`jps | grep jboss-modules.jar`\" = \"x\" ]; then exit 1; fi";
+    private static final String CHECK_JBOSS_ALIVE_CMD_IBM = "if [ \"x`ps aux | grep 'jboss-module[s]'`\" = \"x\" ]; then exit 1; fi";
+    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD_SUN = "if [ \"x`/usr/ucb/ps aux | grep '\\[java\\] <defunct>'`\" = \"x\" ]; then exit 1; fi";
+    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "if [ \"x`ps aux | grep '\\[java\\] <defunct>'`\" = \"x\" ]; then exit 1; fi";
+    private static final String SHUTDOWN_JBOSS_CMD = "jps | grep jboss-modules.jar | awk '{print $1}' | xargs kill";
+    private static final String SHUTDOWN_JBOSS_CMD_IBM = "ps axu | grep jboss-module[s] | awk '{print $2}' | xargs kill";
+    
+    
     private int checkPeriodMillis = 10 * 1000;
     private int numChecks = 60;
 
@@ -40,28 +44,39 @@ public class JBossAS7ServerKillProcessor implements ServerKillProcessor {
             }
         }
 
-        //We've waited long enough for Byteman to kil the server and it has not yet done it.
-        // Kill the server manually and fail the test
+        //We've waited long enough for Byteman to kill the server and it has not yet done it.
+        // Kill the server manually and fail the test.
         shutdownJBoss();
         throw new RuntimeException("jboss-as was not killed by Byteman, this indicates a test failure");
     }
 
     private boolean jbossIsAlive() throws Exception {
-        int exitCode = runShellCommand(CHECK_JBOSS_ALIVE_CMD);
-
-        //Command will 'exit 1' if jboss is not running and 'exit 0' if it is
-        return exitCode == 0;
+        //Command will 'exit 1' if jboss is not running and 'exit 0' if it is.
+        //Check if 'jps' command exists, which means is it IBM jdk or not, as IBM jdk does not support 'jps' it needs to execute 'ps aux'.
+        if (runShellCommand("jps", false) == 0) {
+    	    return runShellCommand(CHECK_JBOSS_ALIVE_CMD) == 0;
+        } else {
+            return runShellCommand(CHECK_JBOSS_ALIVE_CMD_IBM) == 0;
+        }
     }
     
     private boolean isDefunctJavaProcess() throws Exception {
-        int exitCode = runShellCommand(CHECK_FOR_DEFUNCT_JAVA_CMD);
-
-        //Command will 'exit 1' if a defunct java process is not running and 'exit 0' if there is
-        return exitCode == 0;
+        //Command will 'exit 1' if a defunct java process is not running and 'exit 0' if there is.
+        //Check 'ps aux' exists, which means is it SunOs or not, as SunOs does not support 'ps aux' so it needs to execute '/usr/ucb/ps aux'.
+        if (runShellCommand("ps aux", false) == 0) {
+            return runShellCommand(CHECK_FOR_DEFUNCT_JAVA_CMD) == 0;
+        } else {
+            return runShellCommand(CHECK_FOR_DEFUNCT_JAVA_CMD_SUN) == 0;
+        }
     }
 
     private void shutdownJBoss() throws Exception {
-        runShellCommand(SHUTDOWN_JBOSS_CMD);
+        //Check if 'jps' command exists, which means is it IBM jdk or not, as IBM jdk does not support 'jps' we needs to execute 'ps aux'.
+        if (runShellCommand("jps", false) == 0) {
+            runShellCommand(SHUTDOWN_JBOSS_CMD);
+        } else {
+            runShellCommand(SHUTDOWN_JBOSS_CMD_IBM);
+        }
 
         // wait 5 * 60 second for jboss-as shutdown complete
         for (int i = 0; i < 60; i++) {
@@ -76,14 +91,20 @@ public class JBossAS7ServerKillProcessor implements ServerKillProcessor {
     }
 
     private int runShellCommand(String cmd) throws Exception {
+        return runShellCommand(cmd, true);
+    }
+    
+    private int runShellCommand(String cmd, boolean dumbStream) throws Exception {
         logger.info("Executing shell command: '" + cmd + "'");
         ProcessBuilder pb = new ProcessBuilder("/bin/sh", "-c", cmd);
         Process p = pb.start();
         p.waitFor();
 
-        dumpStream("std out", p.getInputStream());
-        dumpStream("std error", p.getErrorStream());
-
+        if (dumbStream) {
+	        dumpStream("std out", p.getInputStream());
+	        dumpStream("std error", p.getErrorStream());
+        }
+        
         p.destroy();
 
         return p.exitValue();
@@ -113,7 +134,12 @@ public class JBossAS7ServerKillProcessor implements ServerKillProcessor {
         runShellCommand("mkdir -p " + dir);
 
         String logFile = dir + "/" + scriptName + ":" + testClass + "_" + processLogId++ + ".txt";
-        runShellCommand("ps aux > " + logFile);
+    	//Check 'ps aux' exists, which means is it SunOs or not, as SunOs does not support 'ps aux' so it needs to execute '/usr/ucb/ps aux'.
+        if (runShellCommand("ps aux", false) == 0) {
+            runShellCommand("ps aux > " + logFile);
+        } else {
+            runShellCommand("/usr/ucb/ps aux > " + logFile);
+        }
         logger.info("Logged current running processes to: " + logFile);
     }
 }
