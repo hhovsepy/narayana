@@ -1,28 +1,20 @@
-package org.jboss.jbossts.txbridge.tests.extension;
+package com.arjuna.qa.extension;
 
+import org.jboss.arquillian.container.spi.Container;
+import org.jboss.arquillian.container.spi.ServerKillProcessor;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-import org.jboss.arquillian.container.spi.Container;
-import org.jboss.arquillian.container.spi.ServerKillProcessor;
+public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
 
-/**
- * 
- *  @author <a href="mailto:hhovsepy@redhat.com">Hayk Hovsepyan</a>
- *
- */
-public class JBossTSAS7ServerKillProcessorWin implements ServerKillProcessor {
-
-    private static final Logger logger = Logger.getLogger(JBossTSAS7ServerKillProcessorWin.class.getName());
-    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr jboss-module | findstr /v findstr"; //skip "findstr" from output, windows workaround
-    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr defunct | findstr /v findstr"; //skip "findstr" from output, windows workaround
+    private static final Logger logger = Logger.getLogger(JBossAS7ServerKillProcessorWin.class.getName());
+    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,ProcessId | findstr jboss-module";
+    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,ProcessId | findstr defunct";
     private static final String SHUTDOWN_JBOSS_CMD = "taskkill /F /T /PID %s";
 
     private int checkPeriodMillis = 10 * 1000;
@@ -32,7 +24,7 @@ public class JBossTSAS7ServerKillProcessorWin implements ServerKillProcessor {
 
     @Override
     public void kill(Container container) throws Exception {
-    	logger.info("waiting for byteman to kill the server");
+        logger.info("waiting for byteman to kill the server");
 
         for (int i = 0; i < numChecks; i++) {
 
@@ -49,7 +41,7 @@ public class JBossTSAS7ServerKillProcessorWin implements ServerKillProcessor {
             }
         }
 
-        //We've waited long enough for Byteman to kill the server and it has not yet done it.
+        //We've waited long enough for Byteman to kil the server and it has not yet done it.
         // Kill the server manually and fail the test
         shutdownJBoss();
         throw new RuntimeException("jboss-as was not killed by Byteman, this indicates a test failure");
@@ -95,12 +87,11 @@ public class JBossTSAS7ServerKillProcessorWin implements ServerKillProcessor {
         logger.info("Executing shell command: '" + cmd + "'");
         ProcessBuilder pb = new ProcessBuilder("cmd", "/c", cmd);
         Process p = pb.start();
-        
+        p.waitFor();
+
         String res = dumpStream("std out", p.getInputStream());
         dumpStream("std error", p.getErrorStream());
-       
-        p.waitFor();
-        
+
         p.destroy();
 
         return res;
@@ -109,17 +100,11 @@ public class JBossTSAS7ServerKillProcessorWin implements ServerKillProcessor {
     private String dumpStream(String msg, InputStream is) {
         try {
             BufferedReader ein = new BufferedReader(new InputStreamReader(is));
-            List<String> lines = new LinkedList<String>();
-            String line;
-            while ( (line = ein.readLine()) != null) {
-            	lines.add(line);
-            }
-
+            String res = ein.readLine();
             is.close();
-            if (!lines.isEmpty()) {
-            	String res = lines.get(0);
+            if (res != null)
+            {
                 System.out.printf("%s %s\n", msg, res);
-                logger.info("Execution result: '" + res + "'");
                 return res;
             }
         } catch (IOException e) {
