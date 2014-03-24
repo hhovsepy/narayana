@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -27,7 +29,6 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
     public void kill(Container container) throws Exception {
     	logger.info("waiting for byteman to kill the server");
 
-
         for (int i = 0; i < numChecks; i++) {
 
             if (jbossIsAlive()) {
@@ -43,7 +44,7 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
             }
         }
 
-        //We've waited long enough for Byteman to kil the server and it has not yet done it.
+        //We've waited long enough for Byteman to kill the server and it has not yet done it.
         // Kill the server manually and fail the test
         shutdownJBoss();
         throw new RuntimeException("jboss-as was not killed by Byteman, this indicates a test failure");
@@ -70,30 +71,31 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
     		if (splitLine.length != 1) {
                 String pid = splitLine[(splitLine.length) - 1];
                 runShellCommand(String.format(SHUTDOWN_JBOSS_CMD, pid));	
-            }
+    		}
     	}
-
-        // wait 5 * 60 second for jboss-as shutdown complete
+		
+		// wait 5 * 60 second for jboss-as shutdown complete
         for (int i = 0; i < 60; i++) {
-
+		
             if (jbossIsAlive()) {
-                Thread.sleep(5000);
-            } else {
-                logger.info("jboss-as shutdown after sending shutdown command");
-                return;
-            }
-        }
+		        Thread.sleep(5000);
+		    } else {
+		        logger.info("jboss-as shutdown after sending shutdown command");
+		        return;
+		    }
+		}
     }
 
     private String runShellCommand(String cmd) throws Exception {
         logger.info("Executing shell command: '" + cmd + "'");
         ProcessBuilder pb = new ProcessBuilder("cmd", "/c", cmd);
         Process p = pb.start();
-        p.waitFor();
-
+        
         String res = dumpStream("std out", p.getInputStream());
         dumpStream("std error", p.getErrorStream());
-
+       
+        p.waitFor();
+        
         p.destroy();
 
         return res;
@@ -102,10 +104,15 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
     private String dumpStream(String msg, InputStream is) {
         try {
             BufferedReader ein = new BufferedReader(new InputStreamReader(is));
-            String res = ein.readLine();
+            List<String> lines = new LinkedList<String>();
+            String line;
+            while ( (line = ein.readLine()) != null) {
+            	lines.add(line);
+            }
+
             is.close();
-            if (res != null)
-            {
+            if (!lines.isEmpty()) {
+            	String res = lines.get(0);
                 System.out.printf("%s %s\n", msg, res);
                 logger.info("Execution result: '" + res + "'");
                 return res;
