@@ -13,8 +13,8 @@ import java.util.logging.Logger;
 public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
 
     private static final Logger logger = Logger.getLogger(JBossAS7ServerKillProcessorWin.class.getName());
-    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,ProcessId | findstr jboss-module";
-    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,ProcessId | findstr defunct";
+    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr jboss-module";
+    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr defunct";
     private static final String SHUTDOWN_JBOSS_CMD = "taskkill /F /T /PID %s";
 
     private int checkPeriodMillis = 10 * 1000;
@@ -105,6 +105,7 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
             if (res != null)
             {
                 System.out.printf("%s %s\n", msg, res);
+                logger.info("Execution result: '" + res + "'");
                 return res;
             }
         } catch (IOException e) {
