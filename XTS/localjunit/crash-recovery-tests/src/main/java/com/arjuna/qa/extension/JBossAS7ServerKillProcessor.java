@@ -1,13 +1,14 @@
 package com.arjuna.qa.extension;
 
-import org.jboss.arquillian.container.spi.Container;
-import org.jboss.arquillian.container.spi.ServerKillProcessor;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Map;
 import java.util.logging.Logger;
+
+import org.jboss.arquillian.container.spi.Container;
+import org.jboss.arquillian.container.spi.ServerKillProcessor;
 
 public class JBossAS7ServerKillProcessor implements ServerKillProcessor {
 

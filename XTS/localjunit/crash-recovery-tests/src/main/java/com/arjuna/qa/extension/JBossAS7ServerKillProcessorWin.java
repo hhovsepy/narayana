@@ -1,7 +1,5 @@
 package com.arjuna.qa.extension;
 
-import org.jboss.arquillian.container.spi.Container;
-import org.jboss.arquillian.container.spi.ServerKillProcessor;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -10,11 +8,14 @@ import java.io.InputStreamReader;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import org.jboss.arquillian.container.spi.Container;
+import org.jboss.arquillian.container.spi.ServerKillProcessor;
+
 public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
 
     private static final Logger logger = Logger.getLogger(JBossAS7ServerKillProcessorWin.class.getName());
-    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr jboss-module";
-    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr defunct";
+    private static final String CHECK_JBOSS_ALIVE_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr jboss-module | findstr /v findstr"; //skip "findstr" from output, windows workaround
+    private static final String CHECK_FOR_DEFUNCT_JAVA_CMD = "wmic PROCESS GET Name,CommandLine,ProcessId | findstr defunct | findstr /v findstr"; //skip "findstr" from output, windows workaround
     private static final String SHUTDOWN_JBOSS_CMD = "taskkill /F /T /PID %s";
 
     private int checkPeriodMillis = 10 * 1000;
@@ -24,7 +25,8 @@ public class JBossAS7ServerKillProcessorWin implements ServerKillProcessor {
 
     @Override
     public void kill(Container container) throws Exception {
-        logger.info("waiting for byteman to kill the server");
+    	logger.info("waiting for byteman to kill the server");
+
 
         for (int i = 0; i < numChecks; i++) {
 
