@@ -24,6 +24,7 @@ package org.jboss.jbossts.txbridge.tests.extension;
 import org.jboss.arquillian.container.spi.ServerKillProcessor;
 import org.jboss.arquillian.core.spi.LoadableExtension;
 
+
 /**
  * Server extension for JBossTSAS7ServerKillProcessor.
  *
@@ -31,8 +32,19 @@ import org.jboss.arquillian.core.spi.LoadableExtension;
  */
 public class JBossTSServerExtension implements LoadableExtension {
 
-    public void register(ExtensionBuilder builder) {
-        builder.service(ServerKillProcessor.class, JBossTSAS7ServerKillProcessor.class);
+	@Override
+	public void register(ExtensionBuilder builder) {
+		if (isWindows()) {
+			builder.service(ServerKillProcessor.class, JBossTSAS7ServerKillProcessorWin.class);
+		} else {
+			builder.service(ServerKillProcessor.class, JBossTSAS7ServerKillProcessor.class);
+		}
+	}
+	
+	public static boolean isWindows() {
+        String osName = System.getProperty("os.name");
+
+        return osName != null  && ((osName.indexOf("Windows") > -1) || (osName.indexOf("windows") > -1));
     }
 }
 
