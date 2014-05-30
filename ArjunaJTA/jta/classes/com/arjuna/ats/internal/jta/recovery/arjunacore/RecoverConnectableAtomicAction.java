@@ -34,19 +34,19 @@ import com.arjuna.ats.internal.jta.resources.arjunacore.CommitMarkableResourceRe
 import com.arjuna.ats.jta.xa.XidImple;
 
 public class RecoverConnectableAtomicAction extends AtomicAction {
+    public static final String ATOMIC_ACTION_TYPE = new AtomicAction().type();
+    public static final String CONNECTABLE_ATOMIC_ACTION_TYPE = ATOMIC_ACTION_TYPE	+ "Connectable";
 
 	private String jndiName;
 	private String recoveringAs;
 	private Xid xid;
 	private boolean hasCompleted;
 
-	public RecoverConnectableAtomicAction(String type, Uid rcvUid)
+	public RecoverConnectableAtomicAction(String type, Uid rcvUid, InputObjectState os)
 			throws ObjectStoreException, IOException {
 		super(rcvUid);
 		this.recoveringAs = type;
-
-		InputObjectState os = StoreManager.getParticipantStore()
-				.read_committed(objectUid, type());
+		
 		// Unpack BasicAction::save_state preamble
 		Header hdr = new Header();
 		unpackHeader(os, hdr);
