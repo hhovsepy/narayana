@@ -37,12 +37,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.LinkedList;
+import java.util.List;
 
 import javax.naming.NamingException;
 
 import com.arjuna.ats.arjuna.common.ObjectStoreEnvironmentBean;
 import com.arjuna.ats.arjuna.common.Uid;
-import com.arjuna.ats.arjuna.exceptions.FatalError;
 import com.arjuna.ats.arjuna.exceptions.ObjectStoreException;
 import com.arjuna.ats.arjuna.logging.tsLogger;
 import com.arjuna.ats.arjuna.objectstore.StateStatus;
@@ -61,6 +62,9 @@ public abstract class JDBCImple_driver {
 	// protected Connection connection;
 	protected String tableName;
 	private JDBCAccess jdbcAccess;
+	
+	private static final int BATCH_SIZE = 1000; 
+	private static final List<Uid> BATCH_UIDS = new LinkedList<Uid>();
 
 	public boolean commit_state(Uid objUid, String typeName)
 			throws ObjectStoreException {
@@ -482,43 +486,69 @@ public abstract class JDBCImple_driver {
 		if (typeName != null) {
 			if ((stateType == StateStatus.OS_COMMITTED)
 					|| (stateType == StateStatus.OS_UNCOMMITTED)) {
+					
+				if (BATCH_UIDS.size() < BATCH_SIZE - 1) {// add Uids into batch list until it's size reached predefined BATCH_SIZE
+					BATCH_UIDS.add(objUid);
+					tsLogger.logger.infof("ADDING UID %s %s %s", objUid.stringForm(), stateType, typeName);
+				} else {
+					BATCH_UIDS.add(objUid);	
+				    Connection connection = null;
+			        PreparedStatement pstmt = null;
 
-			    Connection connection = null;
-		        PreparedStatement pstmt = null;
-				try {
-					connection = jdbcAccess.getConnection();
-					pstmt = connection
-							.prepareStatement("DELETE FROM "
-									+ tableName
-									+ " WHERE UidString = ? AND TypeName = ? AND StateType = ?");
-
-					pstmt.setString(1, objUid.stringForm());
-					pstmt.setString(2, typeName);
-					pstmt.setInt(3, stateType);
-
-					if (pstmt.executeUpdate() > 0) {
-						result = true;
-					}
-
-					connection.commit();
-				} catch (Exception e) {
-					result = false;
-					tsLogger.i18NLogger.warn_objectstore_JDBCImple_8(e);
-				} finally {
-					if (pstmt != null) {
-						try {
-							pstmt.close();
-						} catch (SQLException e) {
-							// Ignore
+					try {
+						connection = jdbcAccess.getConnection();
+						
+						StringBuffer buffer = new StringBuffer();
+	    				for (int i = 0; i < BATCH_UIDS.size(); i++) {
+	    					buffer.append("?,");
+	    				}
+	    				// batch delete the collected Uids
+						pstmt = connection
+								.prepareStatement("DELETE FROM "
+										+ tableName
+										+ " WHERE UidString in ( "
+										+ buffer.substring(0, buffer.length() - 1)
+										+ " ) AND TypeName = ? AND StateType = ?");
+						
+						int index = 0;
+						for (Uid uid : BATCH_UIDS) {
+							pstmt.setString(++index, uid.stringForm());
 						}
+						
+						pstmt.setString(index + 1, "StateManager/BasicAction/TwoPhaseCoordinator/AtomicAction");
+						pstmt.setInt(index + 2, 1);
+	
+						tsLogger.logger.infof("DELETE WHERE");
+	
+						if (pstmt.executeUpdate() > 0) {
+							result = true;
+						}
+	
+						connection.commit();
+						tsLogger.logger.infof("DELETE FINISHED %s", result);
+					} catch (Exception e) {
+						result = false;
+						tsLogger.i18NLogger.warn_objectstore_JDBCImple_8(e);
+					} finally {
+						if (pstmt != null) {
+							try {
+								pstmt.close();
+							} catch (SQLException e) {
+								// Ignore
+								tsLogger.logger.errorf(e, "Error DELETING");
+							}
+						}
+			            if (connection != null) {
+			                try {
+			                    connection.close();
+			                } catch (SQLException e) {
+			                    // Ignore
+			                	tsLogger.logger.errorf(e, "Error CLOSING");
+			                }
+			            }
 					}
-		            if (connection != null) {
-		                try {
-		                    connection.close();
-		                } catch (SQLException e) {
-		                    // Ignore
-		                }
-		            }
+					//clear the Uids list as all were deleted by batch
+					BATCH_UIDS.clear();
 				}
 			} else {
 				// can only remove (UN)COMMITTED objs
